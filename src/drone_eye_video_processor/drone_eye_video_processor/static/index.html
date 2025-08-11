@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Drone Eye Ops Console</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: radial-gradient(circle at top, #0a0a0a 0%, #000000 100%);
+            color: #00ff88;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #00ff88;
+            text-shadow: 0 0 5px #00ff88, 0 0 15px #00ff88;
+        }
+
+        video {
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            background: black;
+            box-shadow: 0 0 10px #00ff88, inset 0 0 20px #004422;
+            max-width: 90%;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            background: transparent;
+            color: #00ff88;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            text-shadow: 0 0 5px #00ff88;
+            transition: all 0.2s ease-in-out;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 136, 0.1);
+            box-shadow: 0 0 8px #00ff88;
+        }
+
+        button:disabled {
+            color: #004422;
+            border-color: #004422;
+            text-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-style: italic;
+            font-size: 14px;
+            color: #00cc66;
+            text-shadow: 0 0 5px #00cc66;
+        }
+
+        /* Animated scanline overlay for cyber effect */
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(to bottom,
+                    rgba(0, 255, 136, 0.05) 0px,
+                    rgba(0, 255, 136, 0.05) 2px,
+                    transparent 2px,
+                    transparent 4px);
+            animation: flicker 2s infinite;
+            z-index: 100;
+        }
+
+        @keyframes flicker {
+
+            0%,
+            100% {
+                opacity: 0.05;
+            }
+
+            50% {
+                opacity: 0.1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="scanlines"></div>
+    <h2>DRONE EYE OPS CONSOLE</h2>
+    <video id="video" autoplay playsinline></video>
+
+    <div class="controls">
+        <button id="startBtn">▶ START FEED</button>
+        <button id="stopBtn" disabled>■ STOP FEED</button>
+    </div>
+
+    <div class="status" id="statusText">[ SYSTEM IDLE ]</div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws`);
+
+        ws.onopen = () => console.log("Connected to WebSocket");
+        ws.onerror = (err) => console.error("WebSocket error", err);
+
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusText = document.getElementById('statusText');
+
+        let stream = null;
+        let sendInterval = null;
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                sendInterval = setInterval(() => {
+                    if (video.videoWidth > 0 && video.videoHeight > 0) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0);
+                        canvas.toBlob(blob => {
+                            if (blob) {
+                                blob.arrayBuffer().then(buffer => ws.send(buffer));
+                            }
+                        }, 'image/jpeg', 0.7);
+                    }
+                }, 100);
+
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                statusText.textContent = "[ STREAM ACTIVE ]";
+            } catch (err) {
+                console.error("Camera error:", err);
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            clearInterval(sendInterval);
+            sendInterval = null;
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            statusText.textContent = "[ SYSTEM IDLE ]";
+        });
+    </script>
+</body>
+
+</html>

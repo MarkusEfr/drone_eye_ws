@@ -1,0 +1,26 @@
+# Core ROS 2 Python client libraries
+rclpy
+
+# OpenCV for image processing
+opencv-python
+
+# CV Bridge to convert between ROS Image and OpenCV images
+cv_bridge
+
+# Web server and WebSocket support
+aiohttp
+aiohttp-cors
+
+# For async programming (comes with Python stdlib, but safe to specify)
+asyncio
+
+# Numpy for array operations
+numpy
+
+# Base64 handling (stdlib, no need to specify)
+
+# Other libs you use
+ultralytics
+deep_sort_realtime
+PyYAML
+setuptools

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>drone_eye_detector</name>
+  <version>0.0.0</version>
+  <description>YOLO-based object detector node for Drone Eye</description>
+  <maintainer email="ros2@todo.todo">ros2</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- Runtime dependencies -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>drone_eye_msgs</exec_depend>
+
+  <!-- YOLO + OpenCV dependencies (Python pip installed) -->
+  <exec_depend>python3-ultralytics</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
