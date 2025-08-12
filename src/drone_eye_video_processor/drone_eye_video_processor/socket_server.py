@@ -57,6 +57,21 @@ class SocketServerNode(Node):
             self.get_logger().error(f"Failed to publish frame: {e}")
 
 
+async def upload_handler(self, request):
+    reader = await request.multipart()
+    field = await reader.next()
+    if field.name == "file":
+        filename = field.filename
+        data = await field.read()
+        np_arr = np.frombuffer(data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if frame is not None:
+            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+            self.publisher.publish(ros_image)
+            return web.Response(text=f"Uploaded and published: {filename}")
+    return web.Response(status=400, text="Invalid file")
+
+
 async def websocket_handler(request: web.Request) -> web.StreamResponse:
     """
     WebSocket handler that accepts binary JPEG frames or base64 data-URIs (text).

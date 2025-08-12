@@ -104,6 +104,8 @@
     <div class="controls">
         <button id="startBtn">▶ START FEED</button>
         <button id="stopBtn" disabled>■ STOP FEED</button>
+        <input type="file" id="fileInput" accept="image/*" />
+        <button id="uploadBtn">↑ UPLOAD</button>
     </div>
 
     <div class="status" id="statusText">[ SYSTEM IDLE ]</div>
@@ -121,6 +123,18 @@
 
         let stream = null;
         let sendInterval = null;
+
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) return alert("Select a file first");
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const text = await res.text();
+            alert(text);
+        });
 
         startBtn.addEventListener('click', async () => {
             try {
