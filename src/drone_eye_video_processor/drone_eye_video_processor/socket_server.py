@@ -17,8 +17,6 @@ import asyncio
 import base64
 import logging
 import signal
-import sys
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -40,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 ALLOWED_ORIGINS = None  # e.g. {"http://localhost:8000", "http://myhost:8000"}
 
 
-class SocketServerNode(Node):
+class SocketServer(Node):
     def __init__(self, topic_name: str = "/camera/image_raw", qos_depth: int = 10):
         super().__init__("video_ws_server")
         self.publisher = self.create_publisher(Image, topic_name, qos_depth)
@@ -55,7 +53,7 @@ class SocketServerNode(Node):
             BoundingBoxes, "/drone_eye/detections", self.detections_callback, 10
         )
 
-        self.get_logger().info(f"SocketServerNode publishing to: {topic_name}")
+        self.get_logger().info(f"SocketServer publishing to: {topic_name}")
 
     def publish_frame(self, frame: np.ndarray):
         """Publish a BGR OpenCV frame to ROS2 as sensor_msgs/Image."""
@@ -152,7 +150,22 @@ async def websocket_handler(self, request: web.Request) -> web.StreamResponse:
     return ws
 
 
-async def init_app(node: SocketServerNode, host: str = "0.0.0.0", port: int = 8000):
+async def upload_handler(self, request):
+    reader = await request.multipart()
+    field = await reader.next()
+    if field.name == "file":
+        filename = field.filename
+        data = await field.read()
+        np_arr = np.frombuffer(data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if frame is not None:
+            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+            self.publisher.publish(ros_image)
+            return web.Response(text=f"Uploaded and published: {filename}")
+    return web.Response(status=400, text="Invalid file")
+
+
+async def init_app(node: SocketServer, host: str = "0.0.0.0", port: int = 8000):
     """Create aiohttp app with static serving and WS route, plus CORS."""
     app = web.Application()
 
@@ -190,9 +203,7 @@ async def init_app(node: SocketServerNode, host: str = "0.0.0.0", port: int = 80
     return app
 
 
-def run(
-    loop: asyncio.AbstractEventLoop, node: SocketServerNode, host="0.0.0.0", port=8000
-):
+def run(loop: asyncio.AbstractEventLoop, node: SocketServer, host="0.0.0.0", port=8000):
     """Start aiohttp server and run until cancelled. Runs in the given asyncio loop."""
     # Create app and runner
     app = loop.run_until_complete(init_app(node, host=host, port=port))
@@ -207,7 +218,7 @@ def run(
 def main(args=None):
     # Init rclpy and ROS node
     rclpy.init(args=args)
-    node = SocketServerNode()
+    node = SocketServer()
 
     # Use MultiThreadedExecutor in a separate thread
     executor = MultiThreadedExecutor()

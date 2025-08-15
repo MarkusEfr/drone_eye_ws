@@ -19,7 +19,6 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "video_processor = drone_eye_video_processor.video_processor:main",
             "socket_server = drone_eye_video_processor.socket_server:main",
         ],
     },
