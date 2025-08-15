@@ -21,7 +21,7 @@ RUN apt update && apt install -y \
 
 # Install Python dependencies
 COPY ./src/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Download YOLOv8m model and fix permissions
 RUN mkdir -p /home/ros2/ws/models && \
@@ -41,8 +41,8 @@ WORKDIR /home/ros2/ws
 COPY --chown=ros2:ros2 ./src ./src
 
 # Source ROS and build the workspace
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    colcon build
+# RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+# colcon build
 
 ########################
 # Entry (Optional)

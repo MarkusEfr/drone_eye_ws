@@ -15,11 +15,11 @@
 
         h2 {
             margin-bottom: 20px;
-            color: #00ff88;
             text-shadow: 0 0 5px #00ff88, 0 0 15px #00ff88;
         }
 
-        video {
+        video,
+        img {
             border: 2px solid #00ff88;
             border-radius: 8px;
             background: black;
@@ -31,21 +31,22 @@
             margin-top: 20px;
         }
 
-        button {
+        button,
+        input[type=file] {
             padding: 10px 20px;
-            margin: 0 10px;
+            margin: 5px;
             border: 1px solid #00ff88;
             border-radius: 5px;
             background: transparent;
             color: #00ff88;
             font-size: 16px;
-            font-family: 'Courier New', monospace;
             cursor: pointer;
             text-shadow: 0 0 5px #00ff88;
             transition: all 0.2s ease-in-out;
         }
 
-        button:hover {
+        button:hover,
+        input[type=file]:hover {
             background: rgba(0, 255, 136, 0.1);
             box-shadow: 0 0 8px #00ff88;
         }
@@ -65,7 +66,6 @@
             text-shadow: 0 0 5px #00cc66;
         }
 
-        /* Animated scanline overlay for cyber effect */
         .scanlines {
             pointer-events: none;
             position: fixed;
@@ -99,7 +99,10 @@
 <body>
     <div class="scanlines"></div>
     <h2>DRONE EYE OPS CONSOLE</h2>
+
+    <!-- Live feed OR annotated feed -->
     <video id="video" autoplay playsinline></video>
+    <img id="annotated" style="display:none;" />
 
     <div class="controls">
         <button id="startBtn">▶ START FEED</button>
@@ -111,35 +114,67 @@
     <div class="status" id="statusText">[ SYSTEM IDLE ]</div>
 
     <script>
-        const ws = new WebSocket(`ws://${location.host}/ws`);
+        // CONFIG — set server IP & port where WebSocketROSBridge runs
+        const WS_SERVER = `ws://${location.hostname}:8000/ws`;
 
-        ws.onopen = () => console.log("Connected to WebSocket");
-        ws.onerror = (err) => console.error("WebSocket error", err);
-
+        // DOM elements
         const video = document.getElementById('video');
+        const annotatedImg = document.getElementById('annotated');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
         const statusText = document.getElementById('statusText');
 
+        let ws = null;
         let stream = null;
         let sendInterval = null;
 
-        document.getElementById('uploadBtn').addEventListener('click', async () => {
-            const fileInput = document.getElementById('fileInput');
-            if (!fileInput.files.length) return alert("Select a file first");
+        // --- INIT WEBSOCKET ---
+        function initWebSocket() {
+            ws = new WebSocket(WS_SERVER);
 
-            const formData = new FormData();
-            formData.append("file", fileInput.files[0]);
+            ws.onopen = () => {
+                console.log("✅ Connected to WebSocketROSBridge");
+                statusText.textContent = "[ CONNECTED TO ROS 2 BRIDGE ]";
+            };
 
-            const res = await fetch('/upload', { method: 'POST', body: formData });
-            const text = await res.text();
-            alert(text);
-        });
+            ws.onerror = (err) => {
+                console.error("❌ WebSocket error", err);
+                statusText.textContent = "[ CONNECTION ERROR ]";
+            };
 
-        startBtn.addEventListener('click', async () => {
+            ws.onclose = () => {
+                console.warn("⚠ WebSocket closed");
+                statusText.textContent = "[ DISCONNECTED ]";
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === "annotated_frame") {
+                        // Switch to annotated feed
+                        annotatedImg.src = msg.data;
+                        annotatedImg.style.display = "block";
+                        video.style.display = "none";
+                    }
+                    if (msg.type === "detections") {
+                        console.log("📦 Detections:", msg.data);
+                    }
+                } catch {
+                    console.error("Invalid message from WS");
+                }
+            };
+        }
+
+        // --- START CAMERA STREAM ---
+        async function startFeed() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
+                video.style.display = "block";
+                annotatedImg.style.display = "none";
+
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
@@ -149,7 +184,7 @@
                         canvas.height = video.videoHeight;
                         ctx.drawImage(video, 0, 0);
                         canvas.toBlob(blob => {
-                            if (blob) {
+                            if (blob && ws && ws.readyState === WebSocket.OPEN) {
                                 blob.arrayBuffer().then(buffer => ws.send(buffer));
                             }
                         }, 'image/jpeg', 0.7);
@@ -161,10 +196,12 @@
                 statusText.textContent = "[ STREAM ACTIVE ]";
             } catch (err) {
                 console.error("Camera error:", err);
+                statusText.textContent = "[ CAMERA ERROR ]";
             }
-        });
+        }
 
-        stopBtn.addEventListener('click', () => {
+        // --- STOP CAMERA STREAM ---
+        function stopFeed() {
             clearInterval(sendInterval);
             sendInterval = null;
 
@@ -176,7 +213,30 @@
             startBtn.disabled = false;
             stopBtn.disabled = true;
             statusText.textContent = "[ SYSTEM IDLE ]";
-        });
+        }
+
+        // --- UPLOAD FILE ---
+        async function uploadFile() {
+            if (!fileInput.files.length) return alert("Select a file first");
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const text = await res.text();
+                alert(text);
+            } catch (err) {
+                console.error("Upload error:", err);
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        startBtn.addEventListener('click', startFeed);
+        stopBtn.addEventListener('click', stopFeed);
+        uploadBtn.addEventListener('click', uploadFile);
+
+        // Start WebSocket immediately on page load
+        initWebSocket();
     </script>
 </body>
 

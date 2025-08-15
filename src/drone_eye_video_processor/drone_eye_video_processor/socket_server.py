@@ -30,7 +30,7 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-
+from drone_eye_msgs.msg import BoundingBoxes
 
 _LOG = logging.getLogger("video_ws_server")
 logging.basicConfig(level=logging.INFO)
@@ -41,101 +41,113 @@ ALLOWED_ORIGINS = None  # e.g. {"http://localhost:8000", "http://myhost:8000"}
 
 
 class SocketServerNode(Node):
-    def __init__(self, topic_name: str = "video_frames", qos_depth: int = 10):
+    def __init__(self, topic_name: str = "/camera/image_raw", qos_depth: int = 10):
         super().__init__("video_ws_server")
         self.publisher = self.create_publisher(Image, topic_name, qos_depth)
         self.bridge = CvBridge()
+        self.active_ws = None  # store the connected websocket
+
+        # Subscribe to detector outputs
+        self.create_subscription(
+            Image, "/drone_eye/video_results", self.annotated_callback, 10
+        )
+        self.create_subscription(
+            BoundingBoxes, "/drone_eye/detections", self.detections_callback, 10
+        )
+
         self.get_logger().info(f"SocketServerNode publishing to: {topic_name}")
 
     def publish_frame(self, frame: np.ndarray):
         """Publish a BGR OpenCV frame to ROS2 as sensor_msgs/Image."""
         try:
             ros_img = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
-            # Optionally set header stamp/frame_id here
             self.publisher.publish(ros_img)
         except Exception as e:
             self.get_logger().error(f"Failed to publish frame: {e}")
 
+    def annotated_callback(self, msg: Image):
+        """Send annotated video frame back to the client."""
+        if self.active_ws is None:
+            return
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            _, jpeg_bytes = cv2.imencode(".jpg", frame)
+            b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
+            payload = {
+                "type": "annotated_frame",
+                "data": f"data:image/jpeg;base64,{b64}",
+            }
+            asyncio.create_task(self.active_ws.send_json(payload))
+        except Exception as e:
+            self.get_logger().error(f"Error sending annotated frame: {e}")
 
-async def upload_handler(self, request):
-    reader = await request.multipart()
-    field = await reader.next()
-    if field.name == "file":
-        filename = field.filename
-        data = await field.read()
-        np_arr = np.frombuffer(data, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        if frame is not None:
-            ros_image = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
-            self.publisher.publish(ros_image)
-            return web.Response(text=f"Uploaded and published: {filename}")
-    return web.Response(status=400, text="Invalid file")
+    def detections_callback(self, msg: BoundingBoxes):
+        """Send detection metadata back to the client."""
+        if self.active_ws is None:
+            return
+        try:
+            boxes = []
+            for box in msg.boxes:
+                boxes.append(
+                    {
+                        "label": box.label,
+                        "confidence": box.probability,
+                        "bbox": [box.xmin, box.ymin, box.xmax, box.ymax],
+                    }
+                )
+            payload = {"type": "detections", "data": boxes}
+            asyncio.create_task(self.active_ws.send_json(payload))
+        except Exception as e:
+            self.get_logger().error(f"Error sending detection data: {e}")
 
 
-async def websocket_handler(request: web.Request) -> web.StreamResponse:
-    """
-    WebSocket handler that accepts binary JPEG frames or base64 data-URIs (text).
-    The Node instance is attached to app['ros_node'].
-    """
-    node: Optional[SocketServerNode] = request.app.get("ros_node")
-    if node is None:
-        return web.Response(status=500, text="ROS node not available")
+def annotated_callback(self, msg: Image):
+    """Send annotated video frame back to the client."""
+    if self.active_ws is None:
+        return
+    try:
+        frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        _, jpeg_np = cv2.imencode(".jpg", frame)
+        jpeg_bytes = jpeg_np.tobytes()  # convert to bytes
+        b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
+        payload = {"type": "annotated_frame", "data": f"data:image/jpeg;base64,{b64}"}
+        asyncio.create_task(self.active_ws.send_json(payload))
+    except Exception as e:
+        self.get_logger().error(f"Error sending annotated frame: {e}")
 
-    # Check origin if configured
-    origin = request.headers.get("Origin")
-    if ALLOWED_ORIGINS is not None:
-        if origin not in ALLOWED_ORIGINS:
-            _LOG.warning("Rejected connection from origin: %s", origin)
-            return web.Response(status=403, text="Forbidden (origin)")
 
+async def websocket_handler(self, request: web.Request) -> web.StreamResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    _LOG.info("WebSocket client connected: %s", request.remote)
+    self.active_ws = ws
+    self.get_logger().info("WebSocket client connected.")
 
     try:
         async for msg in ws:
-            try:
-                if msg.type == WSMsgType.BINARY:
-                    data = msg.data
-                    np_arr = np.frombuffer(data, np.uint8)
-                    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                    if frame is None:
-                        _LOG.warning(
-                            "Failed to decode binary frame (imdecode returned None)"
-                        )
-                        continue
-                    node.publish_frame(frame)
+            if msg.type == WSMsgType.BINARY:
+                np_arr = np.frombuffer(msg.data, np.uint8)
+                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    self.publish_frame(frame)
 
-                elif msg.type == WSMsgType.TEXT:
-                    text = msg.data.strip()
-                    # Accept data URLs: data:image/jpeg;base64,/...
-                    if text.startswith("data:"):
-                        try:
-                            b64 = text.split(",", 1)[1]
-                            data = base64.b64decode(b64)
-                            np_arr = np.frombuffer(data, np.uint8)
-                            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                            if frame is None:
-                                _LOG.warning("Failed to decode text (base64) frame")
-                                continue
-                            node.publish_frame(frame)
-                        except Exception as e:
-                            _LOG.error("Error decoding base64 frame: %s", e)
-                            continue
-                    else:
-                        # If you want to receive JSON control messages, handle here
-                        _LOG.debug("Text WS message: %s", text)
+            elif msg.type == WSMsgType.TEXT:
+                if msg.data.startswith("data:image"):
+                    try:
+                        b64 = msg.data.split(",", 1)[1]
+                        img_data = base64.b64decode(b64)
+                        np_arr = np.frombuffer(img_data, np.uint8)
+                        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            self.publish_frame(frame)
+                    except Exception as e:
+                        self.get_logger().error(f"Base64 decode error: {e}")
 
-                elif msg.type == WSMsgType.ERROR:
-                    _LOG.error(
-                        "WebSocket connection closed with error: %s", ws.exception()
-                    )
-
-            except Exception as inner_e:
-                _LOG.exception("Exception while processing message: %s", inner_e)
+            elif msg.type == WSMsgType.ERROR:
+                self.get_logger().error(f"WebSocket error: {ws.exception()}")
 
     finally:
-        _LOG.info("WebSocket connection closed: %s", request.remote)
+        self.get_logger().info("WebSocket connection closed.")
+        self.active_ws = None
 
     return ws
 
@@ -145,7 +157,7 @@ async def init_app(node: SocketServerNode, host: str = "0.0.0.0", port: int = 80
     app = web.Application()
 
     # Add WS route
-    app.router.add_get("/ws", websocket_handler)
+    app.router.add_get("/ws", node.websocket_handler)
 
     # Static folder (./static next to this file)
     pkg_dir = Path(__file__).resolve().parent
