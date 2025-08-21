@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "drone_eye_video_processor"
+package_name = "drone_eye_server"
 
 setup(
     name=package_name,
@@ -19,7 +19,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "socket_server = drone_eye_video_processor.socket_server:main",
+            "server = drone_eye_server.server:main",
         ],
     },
 )

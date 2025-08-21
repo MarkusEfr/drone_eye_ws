@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Drone Eye Uplink</title>
+    <style>
+        body {
+            background: #0a0f0d;
+            color: #00ff9c;
+            font-family: "Courier New", monospace;
+            padding: 30px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        button,
+        input[type="file"] {
+            background: #111;
+            border: 1px solid #00ff9c;
+            color: #00ff9c;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #00ff9c;
+            color: #111;
+        }
+
+        #status {
+            margin-top: 20px;
+            white-space: pre;
+            font-size: 14px;
+        }
+
+        a {
+            color: #00ff9c;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>== Drone Eye Uplink ==</h2>
+    <input type="file" id="fileInput" accept="video/*">
+    <button id="uploadBtn">Deploy Video</button>
+
+    <div id="status">Awaiting input...</div>
+    <div id="result"></div>
+
+    <script>
+        const uploadBtn = document.getElementById("uploadBtn");
+        const fileInput = document.getElementById("fileInput");
+        const status = document.getElementById("status");
+        const result = document.getElementById("result");
+
+        let pollTimer = null;
+
+        uploadBtn.onclick = () => {
+            if (!fileInput.files.length) return alert("Select a video first");
+            const file = fileInput.files[0];
+
+            status.textContent = ">> Uploading mission data...";
+            result.textContent = "";
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            fetch("/upload", { method: "POST", body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.session) throw new Error("Upload failed");
+                    status.textContent = ">> Upload complete. Processing engaged...";
+                    pollStatus(data.session, data.status, data.result);
+                })
+                .catch(err => {
+                    status.textContent = "!! ERROR: " + err.message;
+                });
+        };
+
+        function pollStatus(sessionId, statusUrl, resultUrl) {
+            pollTimer = setInterval(() => {
+                fetch(statusUrl)
+                    .then(res => res.json())
+                    .then(st => {
+                        if (st.error) {
+                            status.textContent = "!! " + st.error;
+                            clearInterval(pollTimer);
+                            return;
+                        }
+                        const barLen = 20;
+                        const doneBlocks = Math.round((st.progress / 100) * barLen);
+                        const bar = "[" + "■".repeat(doneBlocks) + "░".repeat(barLen - doneBlocks) + "]";
+                        status.textContent =
+                            `>> Session: ${st.session}\n` +
+                            `${bar} ${st.progress}%\n` +
+                            `Processed: ${st.processed_frames}/${st.total_frames} frames`;
+
+                        if (st.done) {
+                            clearInterval(pollTimer);
+                            result.innerHTML = `
+                <br><a href="${resultUrl}" target="_blank">>> Download Results</a>
+              `;
+                            status.textContent += "\n>> Processing completed ✅";
+                        }
+                    });
+            }, 1000);
+        }
+    </script>
+</body>
+
+</html>

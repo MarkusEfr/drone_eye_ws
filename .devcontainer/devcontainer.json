@@ -1,7 +1,7 @@
 {
     "name": "ROS 2 Humble",
     "build": {
-        "context": "..", // 👈 this is key
+        "context": "..",
         "dockerfile": "Dockerfile",
         "args": {
             "ROS_DISTRO": "humble"
@@ -10,10 +10,11 @@
     "customizations": {
         "vscode": {
             "settings": {
-                "terminal.integrated.defaultProfile.linux": "bash"
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "cmake.configureOnOpen": false,
+                "cmake.buildBeforeRun": false
             },
             "extensions": [
-                // "ms-iot.robotics-development",
                 "ms-vscode.cpptools",
                 "ms-python.python"
             ]
@@ -23,6 +24,5 @@
         "source=${localWorkspaceFolder}/src,target=/home/ros2/ws/src,type=bind"
     ],
     "workspaceFolder": "/home/ros2/ws",
-    // "postCreateCommand": "colcon build --symlink-install",
     "remoteUser": "ros2"
 }

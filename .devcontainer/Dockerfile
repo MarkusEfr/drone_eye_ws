@@ -15,6 +15,8 @@ RUN useradd -m ros2 && \
 RUN apt update && apt install -y \
     python3-pip \
     python3-colcon-common-extensions \
+    ros-${ROS_DISTRO}-ament-cmake \
+    ros-dev-tools \
     git curl lsb-release \
     libgl1 libglib2.0-0 sudo && \
     pip install --upgrade pip argcomplete
@@ -39,10 +41,6 @@ WORKDIR /home/ros2/ws
 
 # Copy ROS 2 source code into workspace
 COPY --chown=ros2:ros2 ./src ./src
-
-# Source ROS and build the workspace
-# RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
-# colcon build
 
 ########################
 # Entry (Optional)
