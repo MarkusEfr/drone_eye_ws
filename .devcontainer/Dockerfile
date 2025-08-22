@@ -27,7 +27,7 @@ COPY ./src/requirements.txt /tmp/requirements.txt
 
 # Download YOLOv8m model and fix permissions
 RUN mkdir -p /home/ros2/ws/models && \
-    curl -L -o /home/ros2/ws/models/yolov8m.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m.pt && \
+    curl -L -o /home/ros2/ws/models/yolov8m.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt && \
     chown -R ros2:ros2 /home/ros2/ws
 
 ########################
