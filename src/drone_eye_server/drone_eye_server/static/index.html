@@ -1,111 +1,77 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <title>Drone Eye Uplink</title>
+    <meta charset="utf-8">
+    <title>Drone Eye Processor</title>
     <style>
         body {
-            background: #0a0f0d;
-            color: #00ff9c;
-            font-family: "Courier New", monospace;
-            padding: 30px;
+            font-family: sans-serif;
+            padding: 20px;
         }
 
-        h2 {
-            margin-bottom: 10px;
+        #progress {
+            margin-top: 15px;
+            font-size: 18px;
         }
 
-        button,
-        input[type="file"] {
-            background: #111;
-            border: 1px solid #00ff9c;
-            color: #00ff9c;
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #00ff9c;
-            color: #111;
-        }
-
-        #status {
+        #result {
             margin-top: 20px;
-            white-space: pre;
-            font-size: 14px;
-        }
-
-        a {
-            color: #00ff9c;
+            font-size: 20px;
         }
     </style>
 </head>
 
 <body>
-    <h2>== Drone Eye Uplink ==</h2>
-    <input type="file" id="fileInput" accept="video/*">
-    <button id="uploadBtn">Deploy Video</button>
+    <h1>Drone Eye Video Processing</h1>
+    <form id="uploadForm">
+        <input type="file" name="file" id="fileInput" accept="video/*" required>
+        <button type="submit">Upload</button>
+    </form>
 
-    <div id="status">Awaiting input...</div>
+    <div id="progress">Waiting for upload…</div>
     <div id="result"></div>
 
     <script>
-        const uploadBtn = document.getElementById("uploadBtn");
-        const fileInput = document.getElementById("fileInput");
-        const status = document.getElementById("status");
-        const result = document.getElementById("result");
-
         let pollTimer = null;
 
-        uploadBtn.onclick = () => {
-            if (!fileInput.files.length) return alert("Select a video first");
-            const file = fileInput.files[0];
-
-            status.textContent = ">> Uploading mission data...";
-            result.textContent = "";
+        document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("fileInput");
+            if (!fileInput.files.length) return;
 
             const formData = new FormData();
-            formData.append("file", file);
+            formData.append("file", fileInput.files[0]);
 
-            fetch("/upload", { method: "POST", body: formData })
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.session) throw new Error("Upload failed");
-                    status.textContent = ">> Upload complete. Processing engaged...";
-                    pollStatus(data.session, data.status, data.result);
-                })
-                .catch(err => {
-                    status.textContent = "!! ERROR: " + err.message;
-                });
-        };
+            document.getElementById("progress").textContent = "Uploading…";
 
-        function pollStatus(sessionId, statusUrl, resultUrl) {
-            pollTimer = setInterval(() => {
-                fetch(statusUrl)
-                    .then(res => res.json())
-                    .then(st => {
-                        if (st.error) {
-                            status.textContent = "!! " + st.error;
-                            clearInterval(pollTimer);
-                            return;
-                        }
-                        const barLen = 20;
-                        const doneBlocks = Math.round((st.progress / 100) * barLen);
-                        const bar = "[" + "■".repeat(doneBlocks) + "░".repeat(barLen - doneBlocks) + "]";
-                        status.textContent =
-                            `>> Session: ${st.session}\n` +
-                            `${bar} ${st.progress}%\n` +
-                            `Processed: ${st.processed_frames}/${st.total_frames} frames`;
+            const res = await fetch("/upload", { method: "POST", body: formData });
+            const data = await res.json();
+            const session = data.session;
 
-                        if (st.done) {
-                            clearInterval(pollTimer);
-                            result.innerHTML = `
-                <br><a href="${resultUrl}" target="_blank">>> Download Results</a>
-              `;
-                            status.textContent += "\n>> Processing completed ✅";
-                        }
-                    });
+            document.getElementById("progress").textContent =
+                `Uploaded. Session: ${session}. Processing started…`;
+
+            pollStatus(session);
+        });
+
+        function pollStatus(session) {
+            pollTimer = setInterval(async () => {
+                const res = await fetch(`/status/${session}`);
+                const st = await res.json();
+                const status = document.getElementById("progress");
+                status.textContent =
+                    `Progress: ${st.progress}%\n` +
+                    `Frames: ${st.processed_frames}/${st.total_frames}`;
+
+                if (st.done) {
+                    clearInterval(pollTimer);
+                    const result = document.getElementById("result");
+                    result.innerHTML = `
+            <br><a href="${st.video}" target="_blank">⬇ Download Processed Video</a>
+          `;
+                    status.textContent += "\n✅ Processing completed";
+                }
             }, 1000);
         }
     </script>

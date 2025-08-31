@@ -6,8 +6,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import logging
 
-from drone_eye_msgs.msg import BoundingBoxes
-from drone_eye_msgs.msg import TrackingArray
+from drone_eye_msgs.msg import BoundingBoxes, TrackingArray
 from drone_eye_tracker.tracker import Tracker  # DeepSORT wrapper
 
 _LOG = logging.getLogger("tracker_node")
@@ -41,34 +40,19 @@ class TrackerNode(Node):
         _LOG.info("TrackerNode started")
 
     def image_callback(self, msg: Image):
-        """Store latest frame (used by visualizer later)"""
+        """Store latest frame for tracker use"""
         try:
             self.last_frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except Exception as e:
             _LOG.error(f"Error converting frame: {e}")
 
     def detections_callback(self, msg: BoundingBoxes):
-        """Run tracking given the new detections"""
+        """Run tracking given new detections"""
         if self.last_frame is None:
             return
 
-        dets = []
-        for box in msg.boxes:
-            dets.append(
-                {
-                    # Convert bbox to [x,y,w,h] (DeepSORT expects xywh)
-                    "bbox": [
-                        box.xmin,
-                        box.ymin,
-                        box.xmax - box.xmin,
-                        box.ymax - box.ymin,
-                    ],
-                    "confidence": box.probability,
-                    "label": box.label,
-                }
-            )
-
-        tracks = self.tracker.update(dets, self.last_frame)
+        # Pass raw BoundingBoxes to Tracker (it handles pixel conversion inside)
+        tracks = self.tracker.update(msg.boxes, self.last_frame)
 
         # Wrap into TrackingArray
         tracks_msg = TrackingArray()

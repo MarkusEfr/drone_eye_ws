@@ -1,8 +1,6 @@
 from setuptools import find_packages, setup
-import os
-from glob import glob
 
-package_name = "drone_eye_server"
+package_name = "drone_eye_visualizer"
 
 setup(
     name=package_name,
@@ -11,18 +9,17 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        (os.path.join("share", package_name, "launch"), glob("launch/*.py")),
     ],
-    install_requires=["setuptools", "flask"],
+    install_requires=["setuptools"],
     zip_safe=True,
     maintainer="ros2",
-    maintainer_email="ros2@todo.todo",
+    maintainer_email="markus.efr@gmail.com",
     description="TODO: Package description",
-    license="Apache-2.0",
+    license="TODO: License declaration",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "server_node = drone_eye_server.server_node:main",
+            "visualizer_node = drone_eye_visualizer.visualizer_node:main",
         ],
     },
 )

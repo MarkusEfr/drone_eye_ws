@@ -1,37 +1,35 @@
-from setuptools import setup
-import os
+from setuptools import setup, find_packages
+import pathlib
 
-# Load requirements.txt
 package_name = "drone_eye_detector"
-# __file__ is in build/drone_eye_detector/setup.py during build
-# We want to read requirements.txt from source folder: ../src/drone_eye_detector/requirements.txt
 
-build_dir = os.path.abspath(os.path.dirname(__file__))          # e.g. /home/ros2/ws/build/drone_eye_detector
-ws_dir = os.path.dirname(os.path.dirname(build_dir))             # /home/ros2/ws
-req_path = os.path.join(ws_dir, "src", "drone_eye_detector", "requirements.txt")
+here = pathlib.Path(__file__).parent.resolve()
+req_path = here / "requirements.txt"
 
-with open(req_path) as f:
-    requirements = f.read().splitlines()
+if req_path.exists():
+    with open(req_path) as f:
+        install_requires = f.read().splitlines()
+else:
+    install_requires = []
 
 setup(
     name=package_name,
     version="0.0.1",
-    packages=[package_name],
+    packages=find_packages(),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
     ],
-    install_requires=requirements,
+    install_requires=install_requires,
     zip_safe=True,
-    maintainer="your_name",
-    maintainer_email="your_email@example.com",
-    description="YOLO + Deep SORT detector for Drone Eye",
-    license="Apache License 2.0",
+    maintainer="ros2",
+    maintainer_email="ros2@example.com",
+    description="Drone Eye detector node (YOLOv8-based object detection)",
+    license="MIT",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            # Example executable
-            "detector_node = drone_eye_detector.detector_node:main"
+            "detector_node = drone_eye_detector.detector_node:main",
         ],
     },
 )
