@@ -29,5 +29,17 @@ def generate_launch_description():
                 name="visualizer",
                 output="screen",
             ),
+            Node(
+                package="drone_eye_navigation",
+                executable="orbslam3_node",
+                name="orbslam3",
+                output="screen",
+                parameters=[
+                    {"vocab_file": "/home/ros2/ws/src/ORB_SLAM3/Vocabulary/ORBvoc.txt"},
+                    {
+                        "config_file": "/home/ros2/ws/src/ORB_SLAM3/configs/your_camera.yaml"
+                    },
+                ],
+            ),
         ]
     )
