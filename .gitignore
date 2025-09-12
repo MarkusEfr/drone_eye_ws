@@ -31,3 +31,5 @@ Thumbs.db
 # Other temp or backup files
 *.swp
 *~
+
+ORB_SLAM3/
